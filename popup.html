@@ -95,10 +95,11 @@
       <section class="section export-section" id="exportSection" style="display:none">
         <div class="section-title">Export</div>
         <div class="btn-row">
-          <button id="btnExportCSV" class="btn btn-export">
+          <button id="btnOpenExportModal" class="btn btn-export">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 2v8M5 7l3 3 3-3"/><path d="M3 12h10"/></svg>
-            Download CSV
+            Export Data
           </button>
+          <button id="btnExportCSV" class="btn btn-secondary btn-sm" style="display:none">CSV</button>
           <button id="btnCopyClip" class="btn btn-secondary btn-sm">Copy TSV</button>
         </div>
         <div id="exportInfo" class="export-info"></div>
@@ -410,6 +411,65 @@
     </div>
 
   </div><!-- /#app -->
+
+  <!-- ========== EXPORT MODAL ========== -->
+  <div id="exportModal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:16px;height:16px;stroke:#e8541a"><path d="M8 2v8M5 7l3 3 3-3"/><path d="M3 12h10"/></svg>
+          Export Data
+        </div>
+        <button id="modalClose" class="modal-close" title="Close">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-summary" id="modalRowCount"></div>
+        <div class="modal-options">
+
+          <button id="modalBtnCSV" class="modal-opt">
+            <div class="modal-opt-icon" style="background:rgba(124,58,237,0.15);border-color:rgba(124,58,237,0.3)">
+              <svg viewBox="0 0 20 20" fill="none" stroke="#7c3aed" stroke-width="1.8"><rect x="3" y="2" width="14" height="16" rx="2"/><line x1="3" y1="7" x2="17" y2="7"/><line x1="3" y1="12" x2="17" y2="12"/><line x1="8" y1="7" x2="8" y2="18"/></svg>
+            </div>
+            <div class="modal-opt-text">
+              <div class="modal-opt-name">Download CSV</div>
+              <div class="modal-opt-desc">Comma-separated · Excel-compatible · UTF-8 with BOM</div>
+            </div>
+          </button>
+
+          <button id="modalBtnJSON" class="modal-opt">
+            <div class="modal-opt-icon" style="background:rgba(16,185,129,0.12);border-color:rgba(16,185,129,0.25)">
+              <svg viewBox="0 0 20 20" fill="none" stroke="#10b981" stroke-width="1.8"><path d="M6 4C4.9 4 4 4.9 4 6v2c0 1.1-.9 2-2 2 1.1 0 2 .9 2 2v2c0 1.1.9 2 2 2"/><path d="M14 4c1.1 0 2 .9 2 2v2c0 1.1.9 2 2 2-1.1 0-2 .9-2 2v2c0 1.1-.9 2-2 2"/></svg>
+            </div>
+            <div class="modal-opt-text">
+              <div class="modal-opt-name">Download JSON</div>
+              <div class="modal-opt-desc">Structured JSON array · Ideal for developers &amp; APIs</div>
+            </div>
+          </button>
+
+          <button id="modalBtnPDF" class="modal-opt">
+            <div class="modal-opt-icon" style="background:rgba(239,68,68,0.12);border-color:rgba(239,68,68,0.25)">
+              <svg viewBox="0 0 20 20" fill="none" stroke="#ef4444" stroke-width="1.8"><rect x="3" y="1" width="11" height="15" rx="1.5"/><path d="M14 1l3 3v14a1 1 0 01-1 1H4"/><line x1="6" y1="7" x2="11" y2="7"/><line x1="6" y1="10" x2="11" y2="10"/><line x1="6" y1="13" x2="9" y2="13"/></svg>
+            </div>
+            <div class="modal-opt-text">
+              <div class="modal-opt-name">Download PDF</div>
+              <div class="modal-opt-desc">Formatted table · Max 500 rows · Print-ready</div>
+            </div>
+          </button>
+
+          <button id="modalBtnTSV" class="modal-opt">
+            <div class="modal-opt-icon" style="background:rgba(59,130,246,0.12);border-color:rgba(59,130,246,0.25)">
+              <svg viewBox="0 0 20 20" fill="none" stroke="#3b82f6" stroke-width="1.8"><rect x="2" y="5" width="16" height="10" rx="1"/><path d="M7 5v10M13 5v10"/></svg>
+            </div>
+            <div class="modal-opt-text">
+              <div class="modal-opt-name">Copy as TSV</div>
+              <div class="modal-opt-desc">Tab-separated · Paste directly into Google Sheets</div>
+            </div>
+          </button>
+
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="js/popup.js"></script>
 </body>

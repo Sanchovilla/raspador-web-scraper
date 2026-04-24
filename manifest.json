@@ -5,6 +5,7 @@
   "description": "Extract structured data from any page into CSV. Tables, cards, lists. Multi-page crawling, XPath column mapping, regex filters, saved site configs.",
   "permissions": [
     "activeTab",
+    "tabs",
     "scripting",
     "downloads",
     "storage"

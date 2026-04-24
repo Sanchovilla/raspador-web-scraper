@@ -14,9 +14,11 @@ let currentCand = 0;
 let hiddenCols  = new Set();
 let xpathCols   = [];       // [{name, xpath}]
 let regexFilters = [];      // [{column, pattern, invert}]
-let isCrawling  = false;
-let crawlPageNum = 1;
-let crawlTimer  = null;
+let isCrawling      = false;
+let crawlPageNum    = 1;
+let crawlTimer      = null;
+let crawlEmptyStreak = 0;   // consecutive pages with zero new rows
+const CRAWL_MAX_EMPTY = 2;  // stop after this many barren pages in a row
 let activeTab   = null;
 let sessionLog  = [];       // [{time, msg, type, badge}]
 
@@ -325,6 +327,7 @@ btnStopCrawl.addEventListener('click', () => stopCrawl('Stopped by user'));
 async function startCrawl() {
   isCrawling = true;
   crawlPageNum = 1;
+  crawlEmptyStreak = 0;
   btnStartCrawl.classList.add('hidden');
   btnStopCrawl.classList.remove('hidden');
   statusBar.classList.add('crawling');
@@ -375,6 +378,18 @@ function scheduleCrawlStep() {
         const added = allRows.length - before;
         addLog(`Page ${crawlPageNum} extracted`, 'success', `+${added} rows`);
 
+        // Auto-stop if this page added nothing new
+        if (added === 0) {
+          crawlEmptyStreak++;
+          if (crawlEmptyStreak >= CRAWL_MAX_EMPTY) {
+            stopCrawl(`No new data found — crawl complete (${crawlPageNum} pages)`);
+            return;
+          }
+          addLog(`No new rows on page ${crawlPageNum} (${crawlEmptyStreak}/${CRAWL_MAX_EMPTY} before auto-stop)`, 'warn');
+        } else {
+          crawlEmptyStreak = 0;
+        }
+
         scheduleCrawlStep();
       }, sw * 1000 + 300);
 
@@ -386,6 +401,7 @@ function scheduleCrawlStep() {
 
 function stopCrawl(reason) {
   isCrawling = false;
+  crawlEmptyStreak = 0;
   if (crawlTimer) { clearTimeout(crawlTimer); crawlTimer = null; }
   btnStartCrawl.classList.remove('hidden');
   btnStopCrawl.classList.add('hidden');
@@ -394,6 +410,8 @@ function stopCrawl(reason) {
   setStatus(reason || 'Crawl complete');
   addLog(reason || 'Crawl complete', 'success', `${allRows.length} total rows, ${crawlPageNum} pages`);
   exportInfo.textContent = `${filteredRows.length} rows across ${crawlPageNum} page(s)`;
+  // Show export modal if there is data to export
+  if (allRows.length > 0) showExportModal();
 }
 
 // ---- Extract current candidate ----
@@ -431,13 +449,49 @@ function rowKey(r) {
   return JSON.stringify(Object.values(r).slice(0, 4));
 }
 
-// ---- Export ----
-btnExportCSV.addEventListener('click', () => {
+// ---- Export modal ----
+function showExportModal() {
+  const rows = filteredRows.length ? filteredRows : allRows;
+  const cols = getVisibleCols();
+  $('modalRowCount').textContent = `${rows.length} row${rows.length !== 1 ? 's' : ''}, ${cols.length} column${cols.length !== 1 ? 's' : ''} · ${crawlPageNum} page${crawlPageNum !== 1 ? 's' : ''} crawled`;
+  $('exportModal').classList.remove('hidden');
+}
+
+function hideExportModal() {
+  $('exportModal').classList.add('hidden');
+}
+
+$('modalClose').addEventListener('click', hideExportModal);
+$('exportModal').addEventListener('click', e => {
+  if (e.target === $('exportModal')) hideExportModal();
+});
+
+$('modalBtnCSV').addEventListener('click', () => {
+  doExportCSV();
+  hideExportModal();
+});
+
+$('modalBtnPDF').addEventListener('click', () => {
+  doExportPDF();
+  hideExportModal();
+});
+
+$('modalBtnTSV').addEventListener('click', () => {
+  doClipboard();
+  hideExportModal();
+});
+
+$('modalBtnJSON').addEventListener('click', () => {
+  doExportJSON();
+  hideExportModal();
+});
+
+function doExportCSV() {
   const rows = filteredRows.length ? filteredRows : allRows;
   if (!rows.length) return;
   const cols = getVisibleCols();
   const csv = buildCSV(rows, cols);
-  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' }); // BOM for Excel
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
   const url  = URL.createObjectURL(blob);
   const date = new Date().toISOString().slice(0,19).replace(/[T:]/g, '-');
   const host = hostnameFromUrl(activeTab?.url || '');
@@ -447,17 +501,102 @@ btnExportCSV.addEventListener('click', () => {
     addLog(`CSV exported: ${filename}`, 'success', rows.length + ' rows');
     setTimeout(() => URL.revokeObjectURL(url), 8000);
   });
-});
+}
 
-btnCopyClip.addEventListener('click', () => {
+function doClipboard() {
   const rows = filteredRows.length ? filteredRows : allRows;
   if (!rows.length) return;
   const tsv = buildTSV(rows, getVisibleCols());
   navigator.clipboard.writeText(tsv).then(() => {
-    btnCopyClip.textContent = 'Copied!';
-    setTimeout(() => { btnCopyClip.textContent = 'Copy TSV'; }, 1600);
     addLog('Copied to clipboard as TSV', 'info', rows.length + ' rows');
   });
+}
+
+function doExportPDF() {
+  const rows = (filteredRows.length ? filteredRows : allRows).slice(0, 500);
+  if (!rows.length) return;
+  const cols = getVisibleCols();
+  const host = hostnameFromUrl(activeTab?.url || 'page');
+  const date = new Date().toLocaleString();
+  const truncated = (filteredRows.length ? filteredRows : allRows).length > 500;
+
+  // Build a self-contained HTML page and print it
+  const thCells = cols.map(c => `<th>${escHtml(c)}</th>`).join('');
+  const bodyRows = rows.map(r =>
+    '<tr>' + cols.map(c => `<td>${escHtml(String(r[c] ?? ''))}</td>`).join('') + '</tr>'
+  ).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>Raspador — ${escHtml(host)}</title>
+<style>
+  body { font-family: system-ui, sans-serif; font-size: 10px; color: #111; margin: 20px; }
+  h1 { font-size: 14px; margin-bottom: 2px; color: #e8541a; }
+  .meta { font-size: 9px; color: #666; margin-bottom: 12px; }
+  table { border-collapse: collapse; width: 100%; }
+  th { background: #1c2133; color: #e2e8f0; text-align: left; padding: 5px 8px;
+       font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
+  td { padding: 4px 8px; border-bottom: 1px solid #e5e7eb; word-break: break-word; max-width: 200px; }
+  tr:nth-child(even) td { background: #f9fafb; }
+  .trunc { color: #e8541a; font-size: 9px; margin-top: 10px; }
+  @media print { body { margin: 0; } }
+</style></head><body>
+<h1>Raspador Export — ${escHtml(host)}</h1>
+<div class="meta">Exported ${date} &nbsp;|&nbsp; ${rows.length} rows &nbsp;|&nbsp; ${cols.length} columns &nbsp;|&nbsp; ${crawlPageNum} page(s) crawled</div>
+<table><thead><tr>${thCells}</tr></thead><tbody>${bodyRows}</tbody></table>
+${truncated ? '<p class="trunc">Note: export limited to 500 rows. Download CSV or JSON for the full dataset.</p>' : ''}
+</body></html>`;
+
+  const blob = new Blob([html], { type: 'text/html' });
+  const url  = URL.createObjectURL(blob);
+  // Open in new tab so Chrome's print dialog handles the PDF save
+  chrome.tabs.create({ url }, tab => {
+    // Trigger print after brief paint delay, then close the helper tab
+    setTimeout(() => {
+      chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => window.print() });
+    }, 600);
+  });
+  addLog(`PDF print dialog opened — ${rows.length} rows`, 'success');
+  exportInfo.textContent = `PDF ready: ${rows.length} rows, ${cols.length} cols`;
+}
+
+function escHtml(s) {
+  return String(s || '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function doExportJSON() {
+  const rows = filteredRows.length ? filteredRows : allRows;
+  if (!rows.length) return;
+  const cols = getVisibleCols();
+  const filtered = rows.map(r => {
+    const obj = {};
+    cols.forEach(c => { if (r[c] !== undefined) obj[c] = r[c]; });
+    return obj;
+  });
+  const json = JSON.stringify(filtered, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const date = new Date().toISOString().slice(0,19).replace(/[T:]/g, '-');
+  const host = hostnameFromUrl(activeTab?.url || '');
+  const filename = `raspador-${host}-${date}.json`;
+  chrome.downloads.download({ url, filename, saveAs: false }, () => {
+    exportInfo.textContent = `Saved: ${filename}  (${rows.length} rows)`;
+    addLog(`JSON exported: ${filename}`, 'success', rows.length + ' rows');
+    setTimeout(() => URL.revokeObjectURL(url), 8000);
+  });
+}
+
+// Also wire the persistent Export button on the Extract tab to open the modal
+$('btnOpenExportModal').addEventListener('click', showExportModal);
+
+// ---- Export ----
+btnExportCSV.addEventListener('click', doExportCSV);
+
+btnCopyClip.addEventListener('click', () => {
+  doClipboard();
+  btnCopyClip.textContent = 'Copied!';
+  setTimeout(() => { btnCopyClip.textContent = 'Copy TSV'; }, 1600);
 });
 
 // ---- Session log ----
