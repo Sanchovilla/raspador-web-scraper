@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Raspador — Web Scraper",
   "version": "2.0.0",
-  "description": "Extract structured data from any page into CSV. Tables, cards, lists. Multi-page crawling, XPath column mapping, regex filters, saved site configs.",
+  "description": "Extract structured data from any page into CSV, JSON, or PDF. Tables, lists, cards. Multi-page crawl, XPath columns, regex filters.",
   "permissions": [
     "activeTab",
     "tabs",
